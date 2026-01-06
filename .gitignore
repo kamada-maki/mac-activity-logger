@@ -1,0 +1,7 @@
+cat <<EOF > .gitignore
+venv/
+*.jsonl
+*.png
+.DS_Store
+__pycache__/
+EOF
