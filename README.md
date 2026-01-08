@@ -14,8 +14,8 @@
 プロジェクトを初めて動かす時のみ、以下の手順を実行します。
 
 ```bash
-# プロジェクトフォルダへ移動
-cd ~/git/mac-activity-logger
+# プロジェクトフォルダへ移動（クローンした場所に合わせて変更）
+cd /path/to/mac-activity-logger
 
 # 仮想環境（venv）の作成
 python3 -m venv venv
@@ -37,7 +37,7 @@ pip install pyobjc-framework-Quartz pyobjc-framework-Vision
 ターミナルを開き、以下のコマンドを実行します。停止時に自動で日報が作成されます。
 
 ```bash
-cd ~/git/mac-activity-logger && source venv/bin/activate && ./start-logging.sh
+cd /path/to/mac-activity-logger && source venv/bin/activate && ./start-logging.sh
 ```
 
 ### プログラムの起動（ログ収集のみ）
@@ -45,7 +45,7 @@ cd ~/git/mac-activity-logger && source venv/bin/activate && ./start-logging.sh
 日報作成なしでログ収集のみ行う場合：
 
 ```bash
-cd ~/git/mac-activity-logger && source venv/bin/activate && python logger.py
+cd /path/to/mac-activity-logger && source venv/bin/activate && python logger.py
 ```
 
 ### 権限の許可
@@ -63,7 +63,7 @@ cd ~/git/mac-activity-logger && source venv/bin/activate && python logger.py
 別のターミナルウィンドウで以下のコマンドを実行すると、現在のログをリアルタイムで確認できます。
 
 ```bash
-tail -f ~/git/mac-activity-logger/log_$(date +%Y%m%d).jsonl
+tail -f /path/to/mac-activity-logger/log_$(date +%Y%m%d).jsonl
 
 ```
 
