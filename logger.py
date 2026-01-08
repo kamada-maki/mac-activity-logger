@@ -16,15 +16,71 @@ def get_display_ids():
         return []
     return ids
 
-def get_active_window_info():
-    """現在アクティブなアプリ名を取得"""
+def get_display_bounds():
+    """各ディスプレイの座標範囲を取得する"""
+    display_ids = get_display_ids()
+    bounds = []
+    for display_id in display_ids:
+        rect = Quartz.CGDisplayBounds(display_id)
+        bounds.append({
+            'id': display_id,
+            'x': rect.origin.x,
+            'y': rect.origin.y,
+            'width': rect.size.width,
+            'height': rect.size.height
+        })
+    return bounds
+
+def get_display_for_window(window_bounds, display_bounds_list):
+    """ウィンドウがどのディスプレイにあるかを判定"""
+    win_x = window_bounds.get('X', 0)
+    win_y = window_bounds.get('Y', 0)
+    win_w = window_bounds.get('Width', 0)
+    win_h = window_bounds.get('Height', 0)
+    win_center_x = win_x + win_w / 2
+    win_center_y = win_y + win_h / 2
+
+    for i, db in enumerate(display_bounds_list):
+        if (db['x'] <= win_center_x < db['x'] + db['width'] and
+            db['y'] <= win_center_y < db['y'] + db['height']):
+            return i
+    return 0
+
+def get_active_apps_per_display():
+    """各ディスプレイの最前面アプリを取得"""
+    display_bounds_list = get_display_bounds()
+    num_displays = len(display_bounds_list)
+
+    if num_displays == 0:
+        return ["Unknown"]
+
+    # 各ディスプレイの最前面アプリを格納
+    display_apps = [None] * num_displays
+
     options = Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements
-    # 修正箇所: kNULLWindowID -> kCGNullWindowID
     window_list = Quartz.CGWindowListCopyWindowInfo(options, Quartz.kCGNullWindowID)
+
     for window in window_list:
-        if window.get('kCGWindowLayer') == 0:
-            return window.get('kCGWindowOwnerName', 'Unknown'), window.get('kCGWindowName', 'Unknown')
-    return "Unknown", "Unknown"
+        if window.get('kCGWindowLayer') != 0:
+            continue
+
+        bounds = window.get('kCGWindowBounds')
+        if not bounds:
+            continue
+
+        display_idx = get_display_for_window(bounds, display_bounds_list)
+
+        # まだそのディスプレイのアプリが記録されていなければ記録
+        if display_apps[display_idx] is None:
+            app_name = window.get('kCGWindowOwnerName', 'Unknown')
+            display_apps[display_idx] = app_name
+
+        # 全ディスプレイ分取得できたら終了
+        if all(app is not None for app in display_apps):
+            break
+
+    # Noneのままのディスプレイは"Unknown"に
+    return [app if app else "Unknown" for app in display_apps]
 
 def perform_ocr(image_path):
     """Vision FrameworkでOCR実行"""
@@ -43,38 +99,38 @@ def main():
     
     try:
         while True:
-            app_name, win_title = get_active_window_info()
+            apps = get_active_apps_per_display()
             display_ids = get_display_ids()
-            
+
             ocr_texts = []
             for i, display_id in enumerate(display_ids):
                 temp_img = f"tmp_cap_{i}.png"
-                
+
                 # -D オプションでディスプレイIDを指定して確実に撮影
                 subprocess.run(["screencapture", "-x", "-D", str(display_id), temp_img])
-                
+
                 if os.path.exists(temp_img):
                     text = perform_ocr(temp_img)
                     if text:
                         # どちらの画面のテキストか分かるようにラベルを付与
                         ocr_texts.append(f"--- Screen {i} ---\n{text}")
                     os.remove(temp_img)
-            
+
             all_text = "\n".join(ocr_texts)
-            
+
             data = {
                 "timestamp": datetime.now().isoformat(),
-                "app": app_name,
-                "title": win_title,
+                "apps": apps,
                 "text": all_text
             }
-            
+
             with open(log_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(data, ensure_ascii=False) + "\n")
-            
+
             # 画面数をログに表示
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Recorded: {app_name} ({len(display_ids)} screens)")
-            
+            apps_str = ", ".join(apps)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Recorded: [{apps_str}] ({len(display_ids)} screens)")
+
             # 1分待機
             time.sleep(60)
             
