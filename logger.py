@@ -3,6 +3,7 @@ import json
 import time
 import subprocess
 from datetime import datetime
+import objc
 import Quartz
 from Vision import VNImageRequestHandler, VNRecognizeTextRequest, VNRequestTextRecognitionLevelAccurate
 from Cocoa import NSURL
@@ -84,52 +85,54 @@ def get_active_apps_per_display():
 
 def perform_ocr(image_path):
     """Vision FrameworkでOCR実行"""
-    input_url = NSURL.fileURLWithPath_(image_path)
-    request = VNRecognizeTextRequest.alloc().init()
-    request.setRecognitionLevel_(VNRequestTextRecognitionLevelAccurate)
-    request.setRecognitionLanguages_(["ja-JP", "en-US"])
-    handler = VNImageRequestHandler.alloc().initWithURL_options_(input_url, None)
-    success, error = handler.performRequests_error_([request], None)
-    if not success: return ""
-    return "\n".join([r.topCandidates_(1)[0].string() for r in request.results()])
+    with objc.autorelease_pool():
+        input_url = NSURL.fileURLWithPath_(image_path)
+        request = VNRecognizeTextRequest.alloc().init()
+        request.setRecognitionLevel_(VNRequestTextRecognitionLevelAccurate)
+        request.setRecognitionLanguages_(["ja-JP", "en-US"])
+        handler = VNImageRequestHandler.alloc().initWithURL_options_(input_url, None)
+        success, error = handler.performRequests_error_([request], None)
+        if not success: return ""
+        return "\n".join([r.topCandidates_(1)[0].string() for r in request.results()])
 
 def main():
-    log_file = f"log_{datetime.now().strftime('%Y%m%d')}.jsonl"
-    print(f"記録開始。保存先: {log_file} (Ctrl+Cで停止)")
-    
+    print(f"記録開始 (Ctrl+Cで停止)")
+
     try:
         while True:
-            apps = get_active_apps_per_display()
-            display_ids = get_display_ids()
+            with objc.autorelease_pool():
+                log_file = f"log_{datetime.now().strftime('%Y%m%d')}.jsonl"
+                apps = get_active_apps_per_display()
+                display_ids = get_display_ids()
 
-            ocr_texts = []
-            for i, display_id in enumerate(display_ids):
-                temp_img = f"tmp_cap_{i}.png"
+                ocr_texts = []
+                for i, display_id in enumerate(display_ids):
+                    temp_img = f"tmp_cap_{i}.png"
 
-                # -D オプションでディスプレイIDを指定して確実に撮影
-                subprocess.run(["screencapture", "-x", "-D", str(display_id), temp_img])
+                    # -D オプションでディスプレイIDを指定して確実に撮影
+                    subprocess.run(["screencapture", "-x", "-D", str(display_id), temp_img])
 
-                if os.path.exists(temp_img):
-                    text = perform_ocr(temp_img)
-                    if text:
-                        # どちらの画面のテキストか分かるようにラベルを付与
-                        ocr_texts.append(f"--- Screen {i} ---\n{text}")
-                    os.remove(temp_img)
+                    if os.path.exists(temp_img):
+                        text = perform_ocr(temp_img)
+                        if text:
+                            # どちらの画面のテキストか分かるようにラベルを付与
+                            ocr_texts.append(f"--- Screen {i} ---\n{text}")
+                        os.remove(temp_img)
 
-            all_text = "\n".join(ocr_texts)
+                all_text = "\n".join(ocr_texts)
 
-            data = {
-                "timestamp": datetime.now().isoformat(),
-                "apps": apps,
-                "text": all_text
-            }
+                data = {
+                    "timestamp": datetime.now().isoformat(),
+                    "apps": apps,
+                    "text": all_text
+                }
 
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(json.dumps(data, ensure_ascii=False) + "\n")
+                with open(log_file, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(data, ensure_ascii=False) + "\n")
 
-            # 画面数をログに表示
-            apps_str = ", ".join(apps)
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] Recorded: [{apps_str}] ({len(display_ids)} screens)")
+                # 画面数をログに表示
+                apps_str = ", ".join(apps)
+                print(f"\r[{datetime.now().strftime('%H:%M:%S')}] 記録中... [{apps_str}]", end='', flush=True)
 
             # 1分待機
             time.sleep(60)
